@@ -1,0 +1,35 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testproblem>
+  <name>detectors_parallel_init</name>
+  <owner userid="mlange"/>
+  <tags>flml zoltan<comment>zoltan tag added due to use of flredecomp options</comment></tags>
+  <problem_definition length="short" nprocs="2">
+    <command_line>mpiexec ../../bin/flredecomp -i 1 -o 2 detectors detectors_flredecomp &amp;&amp;
+      mpiexec ../../bin/fluidity detectors_flredecomp.flml</command_line>
+  </problem_definition>
+  <variables>
+    <variable name="solvers_converged" language="python">import os
+files = os.listdir("./")
+solvers_converged = not "matrixdump" in files and not "matrixdump.info" in files</variable>
+    <variable name="time" language="python">from fluidity_tools import stat_parser
+time = stat_parser("detectors.stat")["ElapsedTime"]["value"]</variable>
+    <variable name="detector_steps" language="python">
+import h5py
+detector_steps = len(h5py.File('detectors.detectors.h5part', 'r'))</variable>
+    <variable name="det_positions" language="python">
+import h5py
+import numpy as np
+f = h5py.File('detectors.detectors.h5part', 'r')
+det_positions = np.vstack([f['/Step#0/{}'.format(dim)] for dim in ('x', 'y')])</variable>
+  </variables>
+  <pass_tests>
+    <test name="Solvers converged" language="python">assert(solvers_converged)</test>
+    <test name="Test finished" language="python">assert abs(time - 1.0) &lt; 1.0e-6</test>
+    <test name="Detector output" language="python">assert abs(len(time) - detector_steps) &lt; 1.0e-6</test>
+    <test name="Detectors initialised correctly" language="python">assert max(abs(det_positions[:,0] - [0.5, 0.5])) &lt; 1.0e-6
+assert max(abs(det_positions[:,1] - [0.0, 1.0])) &lt; 1.0e-6
+assert max(abs(det_positions[:,2] - [0.5, 0.5])) &lt; 1.0e-6
+assert max(abs(det_positions[:,3] - [1.0, 0.0])) &lt; 1.0e-6</test>
+  </pass_tests>
+  <warn_tests/>
+</testproblem>

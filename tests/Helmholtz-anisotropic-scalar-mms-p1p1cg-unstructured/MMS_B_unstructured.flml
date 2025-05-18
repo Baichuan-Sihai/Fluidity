@@ -1,0 +1,755 @@
+<?xml version='1.0' encoding='utf-8'?>
+<fluidity_options>
+  <simulation_name>
+    <string_value lines="1">MMS_B_unstructured</string_value>
+  </simulation_name>
+  <problem_type>
+    <string_value lines="1">fluids</string_value>
+  </problem_type>
+  <geometry>
+    <dimension>
+      <integer_value rank="0">2</integer_value>
+    </dimension>
+    <mesh name="CoordinateMesh">
+      <from_mesh>
+        <mesh name="InputMesh"/>
+        <stat>
+          <exclude_from_stat/>
+        </stat>
+      </from_mesh>
+    </mesh>
+    <mesh name="VelocityMesh">
+      <from_mesh>
+        <mesh name="InputMesh"/>
+        <mesh_shape>
+          <polynomial_degree>
+            <integer_value rank="0">1</integer_value>
+          </polynomial_degree>
+        </mesh_shape>
+        <stat>
+          <exclude_from_stat/>
+        </stat>
+      </from_mesh>
+    </mesh>
+    <mesh name="PressureMesh">
+      <from_mesh>
+        <mesh name="InputMesh"/>
+        <stat>
+          <exclude_from_stat/>
+        </stat>
+      </from_mesh>
+    </mesh>
+    <mesh name="InputMesh">
+      <from_file file_name="MMS_B_unstructured">
+        <format name="gmsh"/>
+        <stat>
+          <include_in_stat/>
+        </stat>
+      </from_file>
+    </mesh>
+    <mesh name="ErrorMesh">
+      <from_mesh>
+        <mesh name="CoordinateMesh"/>
+        <mesh_shape>
+          <polynomial_degree>
+            <integer_value rank="0">4</integer_value>
+          </polynomial_degree>
+        </mesh_shape>
+        <mesh_continuity>
+          <string_value>continuous</string_value>
+        </mesh_continuity>
+        <stat>
+          <exclude_from_stat/>
+        </stat>
+      </from_mesh>
+    </mesh>
+    <quadrature>
+      <degree>
+        <integer_value rank="0">8</integer_value>
+      </degree>
+    </quadrature>
+  </geometry>
+  <io>
+    <dump_format>
+      <string_value>vtk</string_value>
+    </dump_format>
+    <dump_period>
+      <constant>
+        <real_value rank="0">1</real_value>
+      </constant>
+    </dump_period>
+    <output_mesh name="VelocityMesh"/>
+    <stat/>
+  </io>
+  <timestepping>
+    <current_time>
+      <real_value rank="0">0.0</real_value>
+    </current_time>
+    <timestep>
+      <real_value rank="0">0.1</real_value>
+    </timestep>
+    <finish_time>
+      <real_value rank="0">1</real_value>
+    </finish_time>
+    <nonlinear_iterations>
+      <integer_value rank="0">2</integer_value>
+    </nonlinear_iterations>
+  </timestepping>
+  <material_phase name="NS">
+    <vector_field rank="1" name="Velocity">
+      <prescribed>
+        <mesh name="VelocityMesh"/>
+        <value name="WholeMesh">
+          <python>
+            <string_value type="code" language="python" lines="20">def val(X,t):
+    import helmholtz_tools as g
+    return g.velocity(X)</string_value>
+          </python>
+        </value>
+        <output/>
+        <stat>
+          <include_in_stat/>
+        </stat>
+        <detectors>
+          <exclude_from_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+      </prescribed>
+    </vector_field>
+    <scalar_field rank="0" name="Tracer">
+      <prognostic>
+        <mesh name="VelocityMesh"/>
+        <equation name="AdvectionDiffusion"/>
+        <spatial_discretisation>
+          <continuous_galerkin>
+            <stabilisation>
+              <no_stabilisation/>
+            </stabilisation>
+            <advection_terms/>
+            <mass_terms/>
+          </continuous_galerkin>
+          <conservative_advection>
+            <real_value rank="0">0.</real_value>
+          </conservative_advection>
+        </spatial_discretisation>
+        <temporal_discretisation>
+          <theta>
+            <real_value rank="0">0.5</real_value>
+          </theta>
+        </temporal_discretisation>
+        <solver>
+          <iterative_method name="gmres">
+            <restart>
+              <integer_value rank="0">30</integer_value>
+            </restart>
+          </iterative_method>
+          <preconditioner name="sor"/>
+          <relative_error>
+            <real_value rank="0">1.e-7</real_value>
+          </relative_error>
+          <max_iterations>
+            <integer_value rank="0">1000</integer_value>
+          </max_iterations>
+          <never_ignore_solver_failures/>
+          <diagnostics>
+            <monitors/>
+          </diagnostics>
+        </solver>
+        <initial_condition name="WholeMesh">
+          <python>
+            <string_value type="code" language="python" lines="20">def val(X,t):
+    import helmholtz_tools as g
+    return g.gaussian(X)</string_value>
+          </python>
+        </initial_condition>
+        <boundary_conditions name="sides">
+          <surface_ids>
+            <integer_value rank="1" shape="4">7 8 9 10</integer_value>
+          </surface_ids>
+          <type name="dirichlet">
+            <python>
+              <string_value type="code" language="python" lines="20">def val(X,t):
+    import helmholtz_tools as g
+    return g.gaussian(X)</string_value>
+            </python>
+          </type>
+        </boundary_conditions>
+        <output/>
+        <stat/>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+        <consistent_interpolation/>
+      </prognostic>
+    </scalar_field>
+    <scalar_field rank="0" name="TracerProjection">
+      <diagnostic>
+        <algorithm name="scalar_galerkin_projection" material_phase_support="single" source_field_name="Tracer" source_field_type="scalar">
+          <solver>
+            <iterative_method name="cg"/>
+            <preconditioner name="sor"/>
+            <relative_error>
+              <real_value rank="0">1.e-10</real_value>
+            </relative_error>
+            <max_iterations>
+              <integer_value rank="0">1000</integer_value>
+            </max_iterations>
+            <never_ignore_solver_failures/>
+            <diagnostics>
+              <monitors/>
+            </diagnostics>
+          </solver>
+        </algorithm>
+        <mesh name="ErrorMesh"/>
+        <output/>
+        <stat/>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </scalar_field>
+    <scalar_field rank="0" name="IsoFilteredTracer">
+      <diagnostic>
+        <algorithm name="helmholtz_smoothed_scalar" material_phase_support="single" source_field_name="Tracer" source_field_type="component">
+          <smoothing_scale_factor>
+            <real_value rank="0">2.0</real_value>
+          </smoothing_scale_factor>
+          <solver>
+            <iterative_method name="cg"/>
+            <preconditioner name="sor"/>
+            <relative_error>
+              <real_value rank="0">1.e-7</real_value>
+            </relative_error>
+            <max_iterations>
+              <integer_value rank="0">1000</integer_value>
+            </max_iterations>
+            <never_ignore_solver_failures/>
+            <diagnostics>
+              <monitors/>
+            </diagnostics>
+          </solver>
+        </algorithm>
+        <mesh name="VelocityMesh"/>
+        <output/>
+        <stat/>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </scalar_field>
+    <scalar_field rank="0" name="IsoFilteredTracerProjection">
+      <diagnostic>
+        <algorithm name="scalar_galerkin_projection" material_phase_support="single" source_field_name="IsoFilteredTracer" source_field_type="scalar">
+          <solver>
+            <iterative_method name="cg"/>
+            <preconditioner name="sor"/>
+            <relative_error>
+              <real_value rank="0">1.e-10</real_value>
+            </relative_error>
+            <max_iterations>
+              <integer_value rank="0">1000</integer_value>
+            </max_iterations>
+            <never_ignore_solver_failures/>
+            <diagnostics>
+              <monitors/>
+            </diagnostics>
+          </solver>
+        </algorithm>
+        <mesh name="ErrorMesh"/>
+        <output/>
+        <stat/>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </scalar_field>
+    <scalar_field rank="0" name="IsoFilterDifference">
+      <diagnostic>
+        <algorithm name="scalar_difference" material_phase_support="single" source_field_1_name="TracerProjection" source_field_1_type="scalar" source_field_2_name="IsoFilteredTracerProjection" source_field_2_type="scalar"/>
+        <mesh name="ErrorMesh"/>
+        <output/>
+        <stat/>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </scalar_field>
+    <scalar_field rank="0" name="AnisoFilteredTracer">
+      <diagnostic>
+        <algorithm name="helmholtz_anisotropic_smoothed_scalar" material_phase_support="single" source_field_name="Tracer" source_field_type="scalar">
+          <smoothing_scale_factor>
+            <real_value rank="0">2.0</real_value>
+          </smoothing_scale_factor>
+          <solver>
+            <iterative_method name="cg"/>
+            <preconditioner name="sor"/>
+            <relative_error>
+              <real_value rank="0">1.e-7</real_value>
+            </relative_error>
+            <max_iterations>
+              <integer_value rank="0">1000</integer_value>
+            </max_iterations>
+            <never_ignore_solver_failures/>
+            <diagnostics>
+              <monitors/>
+            </diagnostics>
+          </solver>
+        </algorithm>
+        <mesh name="VelocityMesh"/>
+        <output/>
+        <stat/>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </scalar_field>
+    <scalar_field rank="0" name="AnisoFilteredTracerProjection">
+      <diagnostic>
+        <algorithm name="scalar_galerkin_projection" material_phase_support="single" source_field_name="AnisoFilteredTracer" source_field_type="scalar">
+          <solver>
+            <iterative_method name="cg"/>
+            <preconditioner name="sor"/>
+            <relative_error>
+              <real_value rank="0">1.e-10</real_value>
+            </relative_error>
+            <max_iterations>
+              <integer_value rank="0">1000</integer_value>
+            </max_iterations>
+            <never_ignore_solver_failures/>
+            <diagnostics>
+              <monitors/>
+            </diagnostics>
+          </solver>
+        </algorithm>
+        <mesh name="ErrorMesh"/>
+        <output/>
+        <stat/>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </scalar_field>
+    <scalar_field rank="0" name="AnisoFilterDifference">
+      <diagnostic>
+        <algorithm name="scalar_difference" material_phase_support="single" source_field_1_name="TracerProjection" source_field_1_type="scalar" source_field_2_name="AnisoFilteredTracerProjection" source_field_2_type="scalar"/>
+        <mesh name="ErrorMesh"/>
+        <output/>
+        <stat/>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </scalar_field>
+    <scalar_field rank="0" name="MLFilteredTracer">
+      <diagnostic>
+        <algorithm name="lumped_mass_smoothed_scalar" material_phase_support="single" source_field_name="Tracer" source_field_type="scalar"/>
+        <mesh name="VelocityMesh"/>
+        <output/>
+        <stat/>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </scalar_field>
+    <scalar_field rank="0" name="MLFilteredTracerProjection">
+      <diagnostic>
+        <algorithm name="scalar_galerkin_projection" material_phase_support="single" source_field_name="MLFilteredTracer" source_field_type="scalar">
+          <solver>
+            <iterative_method name="cg"/>
+            <preconditioner name="sor"/>
+            <relative_error>
+              <real_value rank="0">1.e-10</real_value>
+            </relative_error>
+            <max_iterations>
+              <integer_value rank="0">1000</integer_value>
+            </max_iterations>
+            <never_ignore_solver_failures/>
+            <diagnostics>
+              <monitors/>
+            </diagnostics>
+          </solver>
+        </algorithm>
+        <mesh name="ErrorMesh"/>
+        <output/>
+        <stat/>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </scalar_field>
+    <scalar_field rank="0" name="MLFilterDifference">
+      <diagnostic>
+        <algorithm name="scalar_difference" material_phase_support="single" source_field_1_name="TracerProjection" source_field_1_type="scalar" source_field_2_name="MLFilteredTracerProjection" source_field_2_type="scalar"/>
+        <mesh name="ErrorMesh"/>
+        <output/>
+        <stat/>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </scalar_field>
+    <vector_field rank="1" name="GradTracer">
+      <diagnostic>
+        <algorithm name="grad" material_phase_support="single" source_field_name="Tracer" source_field_type="scalar"/>
+        <mesh name="VelocityMesh"/>
+        <output/>
+        <stat>
+          <include_in_stat/>
+        </stat>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </vector_field>
+    <vector_field rank="1" name="IsoFilteredGradTracer">
+      <diagnostic>
+        <algorithm name="helmholtz_smoothed_vector" material_phase_support="single" source_field_name="GradTracer" source_field_type="vector">
+          <smoothing_scale_factor>
+            <real_value rank="0">2.0</real_value>
+          </smoothing_scale_factor>
+          <solver>
+            <iterative_method name="cg"/>
+            <preconditioner name="sor"/>
+            <relative_error>
+              <real_value rank="0">1.e-7</real_value>
+            </relative_error>
+            <max_iterations>
+              <integer_value rank="0">1000</integer_value>
+            </max_iterations>
+            <never_ignore_solver_failures/>
+            <diagnostics>
+              <monitors/>
+            </diagnostics>
+          </solver>
+        </algorithm>
+        <mesh name="VelocityMesh"/>
+        <output/>
+        <stat>
+          <include_in_stat/>
+        </stat>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </vector_field>
+    <vector_field rank="1" name="GradIsoFilteredTracer">
+      <diagnostic>
+        <algorithm name="grad" material_phase_support="single" source_field_name="IsoFilteredTracer" source_field_type="scalar"/>
+        <mesh name="VelocityMesh"/>
+        <output/>
+        <stat>
+          <include_in_stat/>
+        </stat>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </vector_field>
+    <vector_field rank="1" name="IsoCommError">
+      <diagnostic>
+        <algorithm name="vector_difference" material_phase_support="single" source_field_1_name="IsoFilteredGradTracer" source_field_1_type="vector" source_field_2_name="GradIsoFilteredTracer" source_field_2_type="vector">
+          <absolute_difference/>
+        </algorithm>
+        <mesh name="ErrorMesh"/>
+        <output/>
+        <stat>
+          <include_in_stat/>
+        </stat>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </vector_field>
+    <vector_field rank="1" name="AnisoFilteredGradTracer">
+      <diagnostic>
+        <algorithm name="helmholtz_anisotropic_smoothed_vector" material_phase_support="single" source_field_name="GradTracer" source_field_type="vector">
+          <smoothing_scale_factor>
+            <real_value rank="0">2.0</real_value>
+          </smoothing_scale_factor>
+          <solver>
+            <iterative_method name="cg"/>
+            <preconditioner name="sor"/>
+            <relative_error>
+              <real_value rank="0">1.e-7</real_value>
+            </relative_error>
+            <max_iterations>
+              <integer_value rank="0">1000</integer_value>
+            </max_iterations>
+            <never_ignore_solver_failures/>
+            <diagnostics>
+              <monitors/>
+            </diagnostics>
+          </solver>
+        </algorithm>
+        <mesh name="VelocityMesh"/>
+        <output/>
+        <stat>
+          <include_in_stat/>
+        </stat>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </vector_field>
+    <vector_field rank="1" name="GradAnisoFilteredTracer">
+      <diagnostic>
+        <algorithm name="grad" material_phase_support="single" source_field_name="AnisoFilteredTracer" source_field_type="scalar"/>
+        <mesh name="VelocityMesh"/>
+        <output/>
+        <stat>
+          <include_in_stat/>
+        </stat>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </vector_field>
+    <vector_field rank="1" name="AnisoCommError">
+      <diagnostic>
+        <algorithm name="vector_difference" material_phase_support="single" source_field_1_name="AnisoFilteredGradTracer" source_field_1_type="vector" source_field_2_name="GradAnisoFilteredTracer" source_field_2_type="vector">
+          <absolute_difference/>
+        </algorithm>
+        <mesh name="ErrorMesh"/>
+        <output/>
+        <stat>
+          <include_in_stat/>
+        </stat>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </vector_field>
+    <vector_field rank="1" name="MLFilteredGradTracer">
+      <diagnostic>
+        <algorithm name="lumped_mass_smoothed_vector" material_phase_support="single" source_field_name="GradTracer" source_field_type="vector"/>
+        <mesh name="VelocityMesh"/>
+        <output/>
+        <stat>
+          <include_in_stat/>
+        </stat>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </vector_field>
+    <vector_field rank="1" name="GradMLFilteredTracer">
+      <diagnostic>
+        <algorithm name="grad" material_phase_support="single" source_field_name="MLFilteredTracer" source_field_type="scalar"/>
+        <mesh name="VelocityMesh"/>
+        <output/>
+        <stat>
+          <include_in_stat/>
+        </stat>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </vector_field>
+    <vector_field rank="1" name="MLCommError">
+      <diagnostic>
+        <algorithm name="vector_difference" material_phase_support="single" source_field_1_name="MLFilteredGradTracer" source_field_1_type="vector" source_field_2_name="GradMLFilteredTracer" source_field_2_type="vector">
+          <absolute_difference/>
+        </algorithm>
+        <mesh name="ErrorMesh"/>
+        <output/>
+        <stat>
+          <include_in_stat/>
+        </stat>
+        <convergence>
+          <include_in_convergence/>
+        </convergence>
+        <detectors>
+          <include_in_detectors/>
+        </detectors>
+        <particles>
+          <exclude_from_particles/>
+        </particles>
+        <steady_state>
+          <include_in_steady_state/>
+        </steady_state>
+      </diagnostic>
+    </vector_field>
+  </material_phase>
+</fluidity_options>
