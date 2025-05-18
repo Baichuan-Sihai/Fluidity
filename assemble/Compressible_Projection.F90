@@ -41,7 +41,8 @@ module compressible_projection
   use field_options
   use fefields, only: compute_cv_mass
   use state_fields_module
-  use equation_of_state, only: compressible_eos, compressible_material_eos
+  use equation_of_state, only: compressible_eos, compressible_material_eos, &
+	& get_thermo_variable
   use upwind_stabilisation
   use multiphase_module
   implicit none 
@@ -418,7 +419,7 @@ module compressible_projection
 
     ! pointer to coordinates
     type(vector_field), pointer :: coordinate, nonlinearvelocity, velocity
-    type(scalar_field), pointer :: pressure, density, olddensity
+    type(scalar_field), pointer :: pressure, density, olddensity, thermal
     type(scalar_field), pointer :: source, absorption
     type(scalar_field) :: eospressure, drhodp
     real :: theta, atmospheric_pressure
@@ -486,7 +487,8 @@ module compressible_projection
       call zero(eospressure)
       call zero(drhodp)
   
-      ! this needs to be changed to be evaluated at the quadrature points!
+	! Thermodynamics part
+      call get_thermo_variable(state,thermal)
       call compressible_eos(state, pressure=eospressure, drhodp=drhodp)
   
       ewrite_minmax(density)

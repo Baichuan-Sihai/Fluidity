@@ -61,6 +61,7 @@ module diagnostic_fields
   use state_fields_module
   use interpolation_module
   use streamfunction
+  use vtk_interfaces, only: vtk_write_fields
 
   implicit none
 
@@ -68,6 +69,7 @@ module diagnostic_fields
 
   public :: insert_diagnostic_field, calculate_diagnostic_variable
   public :: calculate_cfl_number, calculate_galerkin_projection
+  public :: safe_set
   
   interface calculate_diagnostic_variable
      module procedure calculate_scalar_diagnostic_variable_single_state, &
@@ -87,6 +89,9 @@ module diagnostic_fields
                      calculate_galerkin_projection_tensor
   end interface
   
+  interface safe_set
+    module procedure safe_set_scalar, safe_set_vector, safe_set_tensor
+  end interface
 
 contains
   
@@ -2846,9 +2851,10 @@ contains
 
    end subroutine calculate_max_bed_shear_stress
 
-   subroutine calculate_galerkin_projection_scalar(state, field)
+   subroutine calculate_galerkin_projection_scalar(state, field, projected)
      type(state_type), intent(in) :: state
      type(scalar_field), intent(inout) :: field
+	 type(scalar_field), intent(inout), target, optional :: projected
        
      character(len=len_trim(field%option_path)) :: path
      character(len=FIELD_NAME_LEN) :: field_name
@@ -2868,10 +2874,16 @@ contains
      check_integrals = .false.
      apply_bcs = .true.
 
-     path = field%option_path
-     call get_option(path // "/diagnostic/source_field_name", field_name)
-     lump_mass=have_option(path // "/diagnostic/lump_mass")
-     projected_field => extract_scalar_field(state, trim(field_name))
+ 	if (.not.present(projected)) then
+		path = field%option_path
+     	call get_option(path // "/diagnostic/source_field_name", field_name)
+     	lump_mass=have_option(path // "/diagnostic/lump_mass")
+     	projected_field => extract_scalar_field(state, trim(field_name))
+	else
+       path = projected%option_path
+       lump_mass=.false.
+       projected_field => projected
+	endif
      positions => extract_vector_field(state, "Coordinate")
 
      ! Assuming they're on the same quadrature
@@ -2906,7 +2918,16 @@ contains
        call deallocate(inverse_mass_lumped)
        call deallocate(rhs)
      else if (.not. dg) then
-       call petsc_solve(field, mass, rhs, option_path=path // "/diagnostic")
+ 		if (.not.present(projected)) then
+	       call petsc_solve(field, mass, rhs, option_path=path // "/diagnostic")
+		else
+			call set_solver_options(field)
+			if (len_trim(projected_field%option_path) /= 0) then
+				call petsc_solve(field, mass, rhs, option_path=projected_field%option_path)
+			else
+				call petsc_solve(field, mass, rhs)
+			endif
+        endif
        call deallocate(mass)
        call deallocate(mass_sparsity)
        call deallocate(rhs)
@@ -2973,9 +2994,10 @@ contains
       
    end subroutine calculate_galerkin_projection_scalar
 
-   subroutine calculate_galerkin_projection_vector(state, field)
+	subroutine calculate_galerkin_projection_vector(state, field, projected)
      type(state_type), intent(in) :: state
      type(vector_field), intent(inout) :: field
+	 type(vector_field), intent(inout), target, optional :: projected
      character(len=len_trim(field%option_path)) :: path
      character(len=FIELD_NAME_LEN) :: field_name
      type(vector_field), pointer :: projected_field
@@ -2994,11 +3016,17 @@ contains
      check_integrals = .false.
      apply_bcs = .true.
 
-     path = field%option_path
-     call get_option(path // "/diagnostic/source_field_name", field_name)
-     lump_mass=have_option(path // "/diagnostic/lump_mass")
-     projected_field => extract_vector_field(state, trim(field_name))
-     positions => extract_vector_field(state, "Coordinate")
+	if (.not.present(projected)) then
+	     path = field%option_path
+     	call get_option(path // "/diagnostic/source_field_name", field_name)
+     	lump_mass=have_option(path // "/diagnostic/lump_mass")
+     	projected_field => extract_vector_field(state, trim(field_name))
+	else
+       path = projected%option_path
+       lump_mass=.false.
+       projected_field => projected
+    endif
+	positions => extract_vector_field(state, "Coordinate")
 
      ! Assuming they're on the same quadrature
      assert(ele_ngi(field, 1) == ele_ngi(projected_field, 1))
@@ -3032,7 +3060,16 @@ contains
        call deallocate(inverse_mass_lumped)
        call deallocate(rhs)
      else if (.not. dg) then
-       call petsc_solve(field, mass, rhs, option_path=path // "/diagnostic")
+		if (.not.present(projected)) then
+			call petsc_solve(field, mass, rhs, option_path=path // "/diagnostic")
+		else
+			call set_solver_options(field)
+			if (len_trim(projected_field%option_path) /= 0) then
+			call petsc_solve(field, mass, rhs, option_path=projected_field%option_path)
+			else
+				call petsc_solve(field, mass, rhs)
+			endif
+       endif
        call deallocate(mass)
        call deallocate(mass_sparsity)
        call deallocate(rhs)
@@ -3101,6 +3138,82 @@ contains
          
    end subroutine calculate_galerkin_projection_vector
 
+    subroutine safe_set_scalar(state,field1,field2,write_fields)
+	type(state_type) , intent(inout) :: state
+	type(scalar_field), intent(inout) :: field1
+	type(scalar_field), intent(inout) :: field2
+	logical, optional, intent(in) :: write_fields
+  
+	if (continuity(field1)<=continuity(field2) .and. &
+	  element_degree(field1,1)>=element_degree(field2,1)) then
+	  call zero(field1)
+	  call remap_field(field2,field1)
+	else
+! 	 call zero(field1)
+	   call calculate_galerkin_projection(state,field1,field2)
+	  if(present_and_true(write_fields))then
+		ewrite_minmax(field1)     
+		ewrite_minmax(field2)
+		call vtk_write_fields(field1%name,&
+		   position=extract_vector_field(state,&
+		   "Coordinate"),&
+		   model=field2%mesh,sfields=(/field1,field2,&
+		   extract_scalar_field(state,"Time")/))
+	   endif
+	end if
+	
+  end subroutine safe_set_scalar
+
+  subroutine safe_set_vector(state,field1,field2,write_fields)
+	type(state_type) , intent(inout) :: state
+	type(vector_field), intent(inout) :: field1
+	type(vector_field), intent(inout) :: field2
+	logical, optional, intent(in) :: write_fields
+  
+	if (continuity(field1)<=continuity(field2) .and. &
+	  element_degree(field1,1)>=element_degree(field2,1)) then
+	  call zero(field1)
+	  call remap_field(field2,field1)
+	else
+! 	 call zero(field1)
+	   call calculate_galerkin_projection(state,field1,field2)
+	  if(present_and_true(write_fields))then
+		ewrite_minmax(field1)     
+		ewrite_minmax(field2)
+		call vtk_write_fields(field1%name,&
+		   position=extract_vector_field(state,&
+		   "Coordinate"),&
+		   model=field2%mesh,vfields=(/field1,field2/))
+	   endif
+	end if
+	
+   end subroutine safe_set_vector
+
+  subroutine safe_set_tensor(state,field1,field2,write_fields)
+	type(state_type) , intent(inout) :: state
+	type(tensor_field), intent(inout) :: field1
+	type(tensor_field), intent(inout) :: field2
+	logical, optional, intent(in) :: write_fields
+  
+	if (continuity(field1)<=continuity(field2) .and. &
+	  element_degree(field1,1)>=element_degree(field2,1)) then
+	  call zero(field1)
+	  call remap_field(field2,field1)
+	else
+! 	 call zero(field1)
+	   call calculate_galerkin_projection(state,field1,field2)
+	  if(present_and_true(write_fields))then
+		ewrite_minmax(field1)     
+		ewrite_minmax(field2)
+		call vtk_write_fields(field1%name,&
+		   position=extract_vector_field(state,&
+		   "Coordinate"),&
+		   model=field2%mesh,tfields=(/field1,field2/))
+	   endif
+	end if
+	
+   end subroutine safe_set_tensor
+
    subroutine calculate_universal_number(field)
      !!< Output the universal numbering associated with field. Clearly this
      !!< is primarily of interest for debugging.
@@ -3155,11 +3268,12 @@ contains
 
    end subroutine calculate_node_owner
    
-   subroutine calculate_galerkin_projection_tensor(state, field, solver_path)
+   subroutine calculate_galerkin_projection_tensor(state, field, projected, solver_path)
      type(state_type), intent(in) :: state
      type(tensor_field), intent(inout) :: field
+	 type(tensor_field), intent(inout), target, optional :: projected
      character(len=*), intent(in), optional :: solver_path
-     character(len=len_trim(field%option_path)) :: path
+     character(len=len_trim(field%option_path)) :: path, solver_path_local
      character(len=FIELD_NAME_LEN) :: field_name
      type(tensor_field), pointer :: projected_field
      type(vector_field), pointer :: positions
@@ -3176,10 +3290,15 @@ contains
      check_integrals = .false.
      apply_bcs = .true.
 
-     path = field%option_path
-     call get_option(path // "/diagnostic/source_field_name", field_name)
-     projected_field => extract_tensor_field(state, trim(field_name))
-     positions => extract_vector_field(state, "Coordinate")
+	if (.not.present(projected)) then
+		path = field%option_path
+		call get_option(path // "/diagnostic/source_field_name", field_name)
+		projected_field => extract_tensor_field(state, trim(field_name))
+	else
+	  path = projected%option_path
+	  projected_field => projected
+	endif
+    positions => extract_vector_field(state, "Coordinate")
 
      ! Assuming they're on the same quadrature
      assert(ele_ngi(field, 1) == ele_ngi(projected_field, 1))
@@ -3198,10 +3317,20 @@ contains
      end do
 
      if (.not. dg) then
-       if (present(solver_path)) then
-         call petsc_solve(field, mass, rhs, option_path=trim(solver_path))
-       else
-         call petsc_solve(field, mass, rhs, option_path=path // "/diagnostic")
+    !    if (present(solver_path)) then
+    !      call petsc_solve(field, mass, rhs, option_path=trim(solver_path))
+    !    else
+    !      call petsc_solve(field, mass, rhs, option_path=path // "/diagnostic")
+		if (.not.present(projected)) then
+			call petsc_solve(field, mass, rhs, option_path=path // "/diagnostic")
+		else
+			call set_solver_options(field)
+			if (.not.present(solver_path).and.len_trim(projected_field%option_path) /= 0) then
+			solver_path_local=projected_field%option_path
+			else
+			solver_path_local=solver_path
+			endif
+			call petsc_solve(field, mass, rhs, option_path=solver_path_local)
        endif
        call deallocate(mass)
        call deallocate(mass_sparsity)
