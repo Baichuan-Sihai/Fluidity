@@ -4,10 +4,10 @@ on: [ push ]
 
 # Ensures that only one mirror task will run at a time.
 concurrency:
-  group: git-mirror
+  group: run
 
 jobs:
-  git-mirror:
+  run:
     if: github.repository == 'Baichuan-Sihai/Fluidity'  # repo to be synced
     runs-on: ubuntu-latest
     steps:
